@@ -11,6 +11,7 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import Control.Monad (void, mzero)
 import Data.Void (Void)
+import Debug.Trace
 
 data EdnElement = EdnNil
                 | EdnBool Bool
@@ -18,10 +19,15 @@ data EdnElement = EdnNil
                 | EdnChar Char
                 | EdnInt Int
                 | EdnFloat Float
+                | EdnSymbol String
+                | EdnPrefixedSymbol
+                  { prefix  :: String
+                  , name    :: String
+                  }
                 | EdnKeyword String
-                | EdnNamespacedKeyword
-                  { namespace :: String
-                  , keyword   :: String
+                | EdnPrefixedKeyword
+                  { prefix  :: String
+                  , name    :: String
                   }
                 | EdnTaggedElement
                   { tag     :: String
@@ -48,7 +54,6 @@ brackets = between (symbol "[") (symbol "]")
 parens   = between (symbol "(") (symbol ")")
 braces   = between (symbol "{") (symbol "}")
 
--- TODO: read #_ ; parse next edn element ; discard it (fail if edn read fail)
 nilParser :: EdnParser EdnElement
 nilParser =
   symbol "nil" $> EdnNil
@@ -93,8 +98,36 @@ setParser :: EdnParser EdnElement
 setParser =
   EdnSet . S.fromList <$> (P.char '#' >> (braces $ many ednParser))
 
+beginningCharacters = ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>'] ++ ['a'..'z'] ++ ['A'..'Z']
+constituentCharacters = beginningCharacters ++ [':', '#'] ++ ['0'..'9']
+
+divideSymParser :: EdnParser EdnElement
+divideSymParser =
+  P.char '/' $> EdnSymbol "/"
+
+identifierParser :: EdnParser EdnElement
+identifierParser = do
+  startingChar <- try $ P.char ':' <|> (oneOf beginningCharacters)
+  prefixOrName <- if startingChar `elem` ['-', '+', '.']
+    then some (oneOf (':' : '#' : beginningCharacters))
+    else some (oneOf constituentCharacters)
+  maybeName <- optional $ do
+    P.char '/'
+    nStartingChar <- oneOf beginningCharacters <|> P.char '/'
+    rest <- many (oneOf constituentCharacters)
+    return $ nStartingChar : rest
+  if startingChar == ':' 
+  then case maybeName of
+      Nothing -> return $ EdnKeyword prefixOrName
+      Just name -> return $ EdnPrefixedKeyword prefixOrName name
+  else case maybeName of
+      Nothing -> return $ EdnSymbol (startingChar : prefixOrName)
+      Just name -> return $ EdnPrefixedSymbol (startingChar : prefixOrName) name
+                                                   
+
 ednParser :: EdnParser EdnElement
-ednParser = listParser
+ednParser = ednWhitespace 
+   >> listParser
   <|> setParser
   <|> vectorParser
   <|> try floatParser
@@ -104,6 +137,8 @@ ednParser = listParser
   <|> try charSymsParser
   <|> try unicodeCharParser
   <|> charParser
+  <|> divideSymParser
+  <|> identifierParser 
 
 runParse =
-  parseTest ednParser "#{[(1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 () ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
+  parseTest ednParser "#{[(:test test :test/test :a.b.c.d/q clojure.core/= clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
