@@ -103,7 +103,9 @@ constituentCharacters = beginningCharacters ++ [':', '#'] ++ ['0'..'9']
 
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
-  P.char '/' $> EdnSymbol "/"
+  try (P.char '/' $> EdnSymbol "/") 
+  <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
+
 
 identifierParser :: EdnParser EdnElement
 identifierParser = do
@@ -113,7 +115,7 @@ identifierParser = do
     else some (oneOf constituentCharacters)
   maybeName <- optional $ do
     P.char '/'
-    nStartingChar <- oneOf beginningCharacters <|> P.char '/'
+    nStartingChar <- oneOf beginningCharacters
     rest <- many (oneOf constituentCharacters)
     return $ nStartingChar : rest
   if startingChar == ':' 
