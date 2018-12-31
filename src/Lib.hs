@@ -119,11 +119,11 @@ identifierParser =
   let beginningCharacters   = ['a'..'z'] ++ ['A'..'Z'] ++ ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
       constituentCharacters = ':' : '#' : ['0'..'9'] ++ beginningCharacters in do
   startingChar <- oneOf beginningCharacters
-  rest <- many . oneOf $
-    if startingChar `elem` ['-', '+', '.']
-      then ':' : '#' : beginningCharacters
-      else constituentCharacters
-  return $ startingChar : rest
+  secondChar <- optional $ oneOf (if startingChar `elem` ['-', '+', '.']
+    then ':' : '#' : beginningCharacters
+    else constituentCharacters)
+  rest <- many (oneOf constituentCharacters)
+  return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
 
 keywordParser :: EdnParser EdnElement
 keywordParser = do
