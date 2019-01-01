@@ -110,8 +110,8 @@ setParser =
   EdnSet . S.fromList <$> (P.char '#' >> braces (many ednParser))
 
 pairs :: [a] -> [(a, a)]
-pairs [] = []
-pairs (x:y:rest) = (x,y) : (pairs rest)
+pairs []         = []
+pairs (x:y:rest) = (x,y) : pairs rest
 
 mapParser :: EdnParser EdnElement
 mapParser =
@@ -153,10 +153,9 @@ taggedElementParser :: EdnParser EdnElement
 taggedElementParser = do
   P.char '#'
   ident <- identifierParser
-  maybeRest <- optional $ (P.char '/' >> identifierParser)
+  maybeRest <- optional (P.char '/' >> identifierParser)
   optional (P.char ' ')
-  element <- ednParser
-  return $ EdnTaggedElement (maybe ident ((ident ++ "/") ++) maybeRest) element
+  EdnTaggedElement (maybe ident ((ident ++ "/") ++) maybeRest) <$> ednParser
 
 lexeme   = Lex.lexeme ednWhitespace
 symbol   = Lex.symbol ednWhitespace
