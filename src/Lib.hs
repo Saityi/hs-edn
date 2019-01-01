@@ -118,13 +118,15 @@ mapParser = EdnMap . M.fromList . pairs <$> braces (many ednParser)
 
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
-  try (P.char '/' $> EdnSymbol "/") <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
+  try (P.char '/' $> EdnSymbol "/")
+    <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
 
 identifierParser :: EdnParser String
 identifierParser = do
   startingChar <- oneOf beginningCharacters
-  let allowedSecondChars =
-        if startingChar `elem` ['-', '+', '.'] then ':' : '#' : beginningCharacters else constituentCharacters
+  let allowedSecondChars = if startingChar `elem` ['-', '+', '.']
+        then ':' : '#' : beginningCharacters
+        else constituentCharacters
   secondChar <- optional $ oneOf allowedSecondChars
   rest       <- many (oneOf constituentCharacters)
   return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
