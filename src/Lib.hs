@@ -51,7 +51,7 @@ ednWhitespace = Lex.space whitespaceConsumer semicolonComment discardPattern
 ednParser :: EdnParser EdnElement
 ednParser = ednWhitespace >>
   -- collections
-  listParser <|> setParser <|> vectorParser <|>
+  listParser <|> (try setParser <|> taggedElementParser) <|> vectorParser <|> mapParser <|>
   -- numbers
   try floatParser <|> numberParser <|>
   -- bools
@@ -109,6 +109,14 @@ setParser :: EdnParser EdnElement
 setParser =
   EdnSet . S.fromList <$> (P.char '#' >> braces (many ednParser))
 
+pairs :: [a] -> [(a, a)]
+pairs [] = []
+pairs (x:y:rest) = (x,y) : (pairs rest)
+
+mapParser :: EdnParser EdnElement
+mapParser =
+  EdnMap . M.fromList . pairs <$> braces (many ednParser)
+
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
   try (P.char '/' $> EdnSymbol "/")
@@ -141,6 +149,15 @@ symbolParser = do
 stringParser :: EdnParser EdnElement
 stringParser = EdnString <$> (P.char '"' >> manyTill Lex.charLiteral (P.char '"'))
 
+taggedElementParser :: EdnParser EdnElement
+taggedElementParser = do
+  P.char '#'
+  ident <- identifierParser
+  maybeRest <- optional $ (P.char '/' >> identifierParser)
+  optional (P.char ' ')
+  element <- ednParser
+  return $ EdnTaggedElement (maybe ident ((ident ++ "/") ++) maybeRest) element
+
 lexeme   = Lex.lexeme ednWhitespace
 symbol   = Lex.symbol ednWhitespace
 brackets = between (symbol "[") (symbol "]")
@@ -148,4 +165,4 @@ parens   = between (symbol "(") (symbol ")")
 braces   = between (symbol "{") (symbol "}")
 
 runParse =
-  parseTest ednParser "#{[(:test test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
+  parseTest ednParser "#{[(:test #inst\"date-time\" #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
