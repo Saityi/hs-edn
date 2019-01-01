@@ -8,7 +8,6 @@ import qualified Data.Set                   as S
 import qualified Data.Text                  as T
 import qualified Data.Vector                as V
 import           Data.Void                  (Void)
-import           Debug.Trace
 import           Text.Megaparsec
 import qualified Text.Megaparsec.Char       as P
 import qualified Text.Megaparsec.Char.Lexer as Lex
@@ -122,16 +121,13 @@ divideSymParser =
   try (P.char '/' $> EdnSymbol "/") <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
 
 identifierParser :: EdnParser String
-identifierParser =
-  let beginningCharacters =
-        ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
-      constituentCharacters = ':' : '#' : ['0' .. '9'] ++ beginningCharacters
-  in  do
-        startingChar <- oneOf beginningCharacters
-        secondChar   <- optional $ oneOf
-          (if startingChar `elem` ['-', '+', '.'] then ':' : '#' : beginningCharacters else constituentCharacters)
-        rest <- many (oneOf constituentCharacters)
-        return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
+identifierParser = do
+  startingChar <- oneOf beginningCharacters
+  let allowedSecondChars =
+        if startingChar `elem` ['-', '+', '.'] then ':' : '#' : beginningCharacters else constituentCharacters
+  secondChar <- optional $ oneOf allowedSecondChars
+  rest       <- many (oneOf constituentCharacters)
+  return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
 
 keywordParser :: EdnParser EdnElement
 keywordParser = do
@@ -162,6 +158,12 @@ symbol = Lex.symbol ednWhitespace
 brackets = between (symbol "[") (symbol "]")
 parens = between (symbol "(") (symbol ")")
 braces = between (symbol "{") (symbol "}")
+
+letters = ['a' .. 'z'] ++ ['A' .. 'Z']
+nums = ['0' .. '9']
+allowedChars = ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
+beginningCharacters = letters ++ allowedChars
+constituentCharacters = ':' : '#' : nums ++ beginningCharacters
 
 runParse = parseTest
   ednParser
