@@ -43,95 +43,95 @@ type EdnParser = Parsec Void T.Text
 
 ednWhitespace :: EdnParser ()
 ednWhitespace = Lex.space whitespaceConsumer semicolonComment discardPattern
-  where semicolonComment   = Lex.skipLineComment ";"
-        discardPattern     = P.string "#_" >> void ednParser
-        whitespaceConsumer = void $ takeWhile1P (Just "white space") isWhitespace
-        isWhitespace c     = (c == ',') || (c == ' ')
+ where
+  semicolonComment   = Lex.skipLineComment ";"
+  discardPattern     = P.string "#_" >> void ednParser
+  whitespaceConsumer = void $ takeWhile1P (Just "white space") isWhitespace
+  isWhitespace c = (c == ',') || (c == ' ')
 
 ednParser :: EdnParser EdnElement
-ednParser = ednWhitespace >>
+ednParser =
+  ednWhitespace
+    >>
   -- collections
-  listParser <|> (try setParser <|> taggedElementParser) <|> vectorParser <|> mapParser <|>
+        listParser
+    <|> (try setParser <|> taggedElementParser)
+    <|> vectorParser
+    <|> mapParser
   -- numbers
-  try floatParser <|> numberParser <|>
+    <|> try floatParser
+    <|> numberParser
   -- bools
-  boolParser <|>
+    <|> boolParser
   -- nil
-  nilParser <|>
+    <|> nilParser
   -- chars
-  try charSymsParser <|> try unicodeCharParser <|> charParser <|>
+    <|> try charSymsParser
+    <|> try unicodeCharParser
+    <|> charParser
   -- strings
-  stringParser <|>
+    <|> stringParser
   -- identifiers (keywords, symbols)
-  divideSymParser <|> keywordParser <|> symbolParser
+    <|> divideSymParser
+    <|> keywordParser
+    <|> symbolParser
 
 nilParser :: EdnParser EdnElement
-nilParser =
-  symbol "nil" $> EdnNil
+nilParser = symbol "nil" $> EdnNil
 
 boolParser :: EdnParser EdnElement
-boolParser =
-  try (symbol "true"  $> EdnBool True) <|>
-       symbol "false" $> EdnBool False
+boolParser = try (symbol "true" $> EdnBool True) <|> symbol "false" $> EdnBool False
 
 charSymsParser :: EdnParser EdnElement
 charSymsParser =
-  try (symbol "\\newline" $> EdnChar '\n') <|>
-  try (symbol "\\return"  $> EdnChar '\r') <|>
-  try (symbol "\\space"   $> EdnChar ' ')  <|>
-       symbol "\\tab"     $> EdnChar '\t'
+  try (symbol "\\newline" $> EdnChar '\n')
+    <|> try (symbol "\\return" $> EdnChar '\r')
+    <|> try (symbol "\\space" $> EdnChar ' ')
+    <|> (symbol "\\tab" $> EdnChar '\t')
 
 charParser :: EdnParser EdnElement
-charParser =
-  EdnChar <$> (P.char '\\' >> lexeme P.latin1Char)
+charParser = EdnChar <$> (P.char '\\' >> lexeme P.latin1Char)
 
 unicodeCharParser :: EdnParser EdnElement
-unicodeCharParser =
-  EdnChar . toEnum <$> (P.char '\\' >> P.char 'u' >> lexeme Lex.decimal)
+unicodeCharParser = EdnChar . toEnum <$> (P.char '\\' >> P.char 'u' >> lexeme Lex.decimal)
 
 numberParser :: EdnParser EdnElement
-numberParser =
-  EdnInt <$> Lex.signed ednWhitespace (lexeme Lex.decimal)
+numberParser = EdnInt <$> Lex.signed ednWhitespace (lexeme Lex.decimal)
 
 floatParser :: EdnParser EdnElement
-floatParser =
-  EdnFloat <$> lexeme Lex.float
+floatParser = EdnFloat <$> lexeme Lex.float
 
 listParser :: EdnParser EdnElement
-listParser =
-  EdnList <$> parens (many ednParser)
+listParser = EdnList <$> parens (many ednParser)
 
 vectorParser :: EdnParser EdnElement
-vectorParser =
-  EdnVector . V.fromList <$> brackets (many ednParser)
+vectorParser = EdnVector . V.fromList <$> brackets (many ednParser)
 
 setParser :: EdnParser EdnElement
-setParser =
-  EdnSet . S.fromList <$> (P.char '#' >> braces (many ednParser))
+setParser = EdnSet . S.fromList <$> (P.char '#' >> braces (many ednParser))
 
 pairs :: [a] -> [(a, a)]
 pairs []         = []
-pairs (x:y:rest) = (x,y) : pairs rest
+pairs (x:y:rest) = (x, y) : pairs rest
 
 mapParser :: EdnParser EdnElement
-mapParser =
-  EdnMap . M.fromList . pairs <$> braces (many ednParser)
+mapParser = EdnMap . M.fromList . pairs <$> braces (many ednParser)
 
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
-  try (P.char '/' $> EdnSymbol "/")
-  <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
+  try (P.char '/' $> EdnSymbol "/") <|> (P.string "clojure.core//" $> EdnPrefixedSymbol "clojure.core" "/")
 
 identifierParser :: EdnParser String
 identifierParser =
-  let beginningCharacters   = ['a'..'z'] ++ ['A'..'Z'] ++ ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
-      constituentCharacters = ':' : '#' : ['0'..'9'] ++ beginningCharacters in do
-  startingChar <- oneOf beginningCharacters
-  secondChar <- optional $ oneOf (if startingChar `elem` ['-', '+', '.']
-    then ':' : '#' : beginningCharacters
-    else constituentCharacters)
-  rest <- many (oneOf constituentCharacters)
-  return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
+  let beginningCharacters =
+        ['a' .. 'z'] ++ ['A' .. 'Z'] ++ ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
+      constituentCharacters = ':' : '#' : ['0' .. '9'] ++ beginningCharacters
+  in  do
+        startingChar <- oneOf beginningCharacters
+        secondChar   <- optional $ oneOf
+          (if startingChar `elem` ['-', '+', '.'] then ':' : '#' : beginningCharacters else constituentCharacters)
+        rest <- many (oneOf constituentCharacters)
+        return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
 
 keywordParser :: EdnParser EdnElement
 keywordParser = do
@@ -152,16 +152,17 @@ stringParser = EdnString <$> (P.char '"' >> manyTill Lex.charLiteral (P.char '"'
 taggedElementParser :: EdnParser EdnElement
 taggedElementParser = do
   P.char '#'
-  ident <- identifierParser
+  ident     <- identifierParser
   maybeRest <- optional (P.char '/' >> identifierParser)
   optional (P.char ' ')
   EdnTaggedElement (maybe ident ((ident ++ "/") ++) maybeRest) <$> ednParser
 
-lexeme   = Lex.lexeme ednWhitespace
-symbol   = Lex.symbol ednWhitespace
+lexeme = Lex.lexeme ednWhitespace
+symbol = Lex.symbol ednWhitespace
 brackets = between (symbol "[") (symbol "]")
-parens   = between (symbol "(") (symbol ")")
-braces   = between (symbol "{") (symbol "}")
+parens = between (symbol "(") (symbol ")")
+braces = between (symbol "{") (symbol "}")
 
-runParse =
-  parseTest ednParser "#{[(:test #inst\"date-time\" #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
+runParse = parseTest
+  ednParser
+  "#{[(:test #inst\"date-time\" #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
