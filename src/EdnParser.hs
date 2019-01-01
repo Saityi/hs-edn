@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lib where
+module EdnParser where
 
 import           Control.Monad              (mzero, void)
 import           Data.Functor
