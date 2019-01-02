@@ -119,11 +119,9 @@ mapParser = EdnMap . M.fromList . pairs <$> braces (many ednParser)
 
 namespacedMapParser :: EdnParser EdnElement
 namespacedMapParser = do
-  P.string "#:"
-  namespace <- identifierParser
-  optional $ P.char ' '
-  (EdnMap map) <- EdnMap . M.fromList . pairs <$> braces (many ednParser)
-  return $ EdnNamespacedMap namespace map
+  EdnNamespacedMap
+    <$> ((P.string "#:") >> identifierParser)
+    <*> ((optional $ P.char ' ') >> (M.fromList . pairs <$> braces (many ednParser)))
 
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
