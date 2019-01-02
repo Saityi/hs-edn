@@ -36,6 +36,7 @@ data EdnElement = EdnNil
                 | EdnVector (V.Vector EdnElement)
                 | EdnSet (S.Set EdnElement)
                 | EdnMap (M.Map EdnElement EdnElement)
+                | EdnNamespacedMap String (M.Map EdnElement EdnElement)
   deriving (Show, Eq, Ord)
 
 type EdnParser = Parsec Void T.Text
@@ -54,7 +55,7 @@ ednParser =
     >>
   -- collections
         listParser
-    <|> (try setParser <|> taggedElementParser)
+    <|> (try setParser <|> namespacedMapParser <|> taggedElementParser)
     <|> vectorParser
     <|> mapParser
   -- numbers
@@ -116,6 +117,14 @@ pairs (x:y:rest) = (x, y) : pairs rest
 mapParser :: EdnParser EdnElement
 mapParser = EdnMap . M.fromList . pairs <$> braces (many ednParser)
 
+namespacedMapParser :: EdnParser EdnElement
+namespacedMapParser = do
+  P.string "#:"
+  namespace <- identifierParser
+  optional $ P.char ' '
+  (EdnMap map) <- EdnMap . M.fromList . pairs <$> braces (many ednParser)
+  return $ EdnNamespacedMap namespace map
+
 divideSymParser :: EdnParser EdnElement
 divideSymParser =
   try (P.char '/' $> EdnSymbol "/")
@@ -169,4 +178,4 @@ constituentCharacters = ':' : '#' : nums ++ beginningCharacters
 
 runParse = parseTest
   ednParser
-  "#{[(:test #inst\"date-time\" #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
+  "#{[(:test #inst\"date-time\" #:test{test \"name\"} #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
