@@ -45,7 +45,7 @@ ednWhitespace :: EdnParser ()
 ednWhitespace = Lex.space whitespaceConsumer semicolonComment discardPattern
  where
   semicolonComment   = Lex.skipLineComment ";"
-  discardPattern     = P.string "#_" >> void ednParser
+  discardPattern     = P.string "#_" >> optional (P.char ' ') >> void ednParser
   whitespaceConsumer = void $ takeWhile1P (Just "white space") isWhitespace
   isWhitespace c = (c == ',') || (c == ' ')
 
@@ -55,9 +55,12 @@ ednParser =
     >>
   -- collections
         listParser
-    <|> (try setParser <|> namespacedMapParser <|> taggedElementParser)
     <|> vectorParser
     <|> mapParser
+    <|> try setParser
+    <|> namespacedMapParser
+  -- Tagged elements
+    <|> taggedElementParser
   -- numbers
     <|> try floatParser
     <|> numberParser
@@ -176,4 +179,4 @@ constituentCharacters = ':' : '#' : nums ++ beginningCharacters
 
 runParse = parseTest
   ednParser
-  "#{[(:test #inst\"date-time\" #:test{test \"name\"} #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
+  "#{[(1 2 #_ 3 :test #inst\"date-time\" #:test{test \"name\"} #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
