@@ -25,6 +25,8 @@ dependencies:
 - containers
 - megaparsec
 - vector
+- time
+- uuid
 
 library:
   source-dirs: src

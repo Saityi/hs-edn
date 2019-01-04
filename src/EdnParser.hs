@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 module EdnParser where
 
-import           Control.Monad              (mzero, void)
-import           Data.Functor
+import           Control.Monad              (void)
+import           Data.Functor               (($>))
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
 import qualified Data.Text                  as T
@@ -113,15 +113,13 @@ vectorParser = EdnVector . V.fromList <$> brackets (many ednParser)
 setParser :: EdnParser EdnElement
 setParser = EdnSet . S.fromList <$> (P.char '#' >> braces (many ednParser))
 
-pairs :: [a] -> [(a, a)]
-pairs []         = []
-pairs (x:y:rest) = (x, y) : pairs rest
-
 mapParser :: EdnParser EdnElement
 mapParser = EdnMap . M.fromList . pairs <$> braces (many ednParser)
+-- TODO: Fail mapParser if not even number of elements
 
 namespacedMapParser :: EdnParser EdnElement
-namespacedMapParser = do
+namespacedMapParser =
+-- TODO: Fail namespacedMapParser if not even number of elements
   EdnNamespacedMap
     <$> ((P.string "#:") >> identifierParser)
     <*> ((optional $ P.char ' ') >> (M.fromList . pairs <$> braces (many ednParser)))
@@ -138,6 +136,9 @@ identifierParser = do
         then ':' : '#' : beginningCharacters
         else constituentCharacters
   secondChar <- optional $ oneOf allowedSecondChars
+  -- TODO: If the second char exists but isn't valid, fail
+  -- right now, if the *parser* fails but a char exists, this returns None
+  -- and will result in an invalid identifier rather than a parsing error
   rest       <- many (oneOf constituentCharacters)
   return $ maybe (startingChar : rest) (\c -> startingChar : c : rest) secondChar
 
@@ -156,6 +157,7 @@ symbolParser = do
 
 stringParser :: EdnParser EdnElement
 stringParser = EdnString <$> (P.char '"' >> manyTill Lex.charLiteral (P.char '"'))
+-- TODO: More specific escape sequences to edn
 
 taggedElementParser :: EdnParser EdnElement
 taggedElementParser = do
@@ -177,6 +179,12 @@ allowedChars = ['.', '*', '+', '!', '-', '_', '?', '$', '%', '&', '=', '<', '>']
 beginningCharacters = letters ++ allowedChars
 constituentCharacters = ':' : '#' : nums ++ beginningCharacters
 
+-- TODO: How can I capture this works on only even-length lists *at compile time*?
+pairs :: [a] -> [(a, a)]
+pairs []         = []
+pairs (x:y:rest) = (x, y) : pairs rest
+
+-- TODO: Actual tests
 runParse = parseTest
   ednParser
   "#{[(1 2 #_ 3 :test #inst\"date-time\" #:test{test \"name\"} #myapp/Person {:first \"Fred\" :last \"Mertz\"} #inst \"1985-04-12T23:20:50.52Z\" #uuid \"f81d4fae-7dec-11d0-a765-00a0c91e6bf6\" test :test/test :a.b.c.d/q clojure.core/= \"teststring\" \" \\t \" clojure.core// 1 2 [3 #_(1 2 3) #_[\\q \\q] #_10 4 5.0 3.143221 #{\\a, \\e, \\i, \\o, \\u,}] 10e2 10.32222e-3 ([[#{}]]) ((\\newline \\return \\space \\tab \\u64 \\u126 \\c \\e nil nil nil)) ((1 2) (3 4)))]}"
