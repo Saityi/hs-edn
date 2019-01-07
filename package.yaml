@@ -27,6 +27,8 @@ dependencies:
 - vector
 - time
 - uuid
+- rfc3339
+- timerep
 
 library:
   source-dirs: src

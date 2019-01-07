@@ -1,8 +1,9 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase, OverloadedStrings, RecordWildCards, NamedFieldPuns #-}
 module EdnParser where
 
 import           Control.Monad              (void)
 import           Data.Functor               (($>))
+import qualified Data.List                  as L
 import qualified Data.Map                   as M
 import qualified Data.Set                   as S
 import qualified Data.Text                  as T
@@ -37,7 +38,47 @@ data EdnElement = EdnNil
                 | EdnSet (S.Set EdnElement)
                 | EdnMap (M.Map EdnElement EdnElement)
                 | EdnNamespacedMap String (M.Map EdnElement EdnElement)
-  deriving (Show, Eq, Ord)
+  deriving (Eq, Ord)
+
+instance Show EdnElement where
+  show = \case
+    EdnNil        -> "nil"
+    EdnBool True  -> "true"
+    EdnBool False -> "false"
+    EdnString s   -> show s
+    EdnChar '\n'  -> "\\newline"
+    EdnChar '\r'  -> "\\return"
+    EdnChar ' '   -> "\\space"
+    EdnChar '\t'  -> "\\tab"
+    EdnChar c     -> '\\' : c : ""
+    EdnInt i      -> show i
+    EdnFloat f    -> show f
+    EdnSymbol s   -> s
+    EdnKeyword s  -> ":" ++ s
+
+    EdnPrefixedSymbol{..} ->
+      prefix ++ "/" ++ name
+
+    EdnPrefixedKeyword{..} ->
+      ":" ++ prefix ++ "/" ++ name
+
+    EdnTaggedElement{..} ->
+      "#" ++ tag ++ " " ++ (show element)
+
+    EdnList elems ->
+      "("  ++ (L.intercalate ", " . fmap show $ elems) ++ ")"
+
+    EdnVector elemsVec ->
+      "[" ++ (L.intercalate ", " . fmap show . V.toList $ elemsVec) ++ "]"
+
+    EdnSet elemsSet ->
+      "#{" ++ (L.intercalate ", " . fmap show . S.toList $ elemsSet) ++ "}"
+
+    EdnMap elemsMap ->
+      "{" ++ (L.intercalate ", " . fmap (\(k, v) -> show k ++ " " ++ show v) . M.toList $ elemsMap) ++ "}"
+
+    EdnNamespacedMap ns m ->
+      "#:" ++ ns ++ show (EdnMap m)
 
 type EdnParser = Parsec Void T.Text
 
@@ -47,12 +88,11 @@ ednWhitespace = Lex.space whitespaceConsumer semicolonComment discardPattern
   semicolonComment   = Lex.skipLineComment ";"
   discardPattern     = P.string "#_" >> optional (P.char ' ') >> void ednParser
   whitespaceConsumer = void $ takeWhile1P (Just "white space") isWhitespace
-  isWhitespace c = (c == ',') || (c == ' ')
+  isWhitespace c = c `elem` [' ', ',', '\t', '\n', '\r']
 
 ednParser :: EdnParser EdnElement
 ednParser =
-  ednWhitespace
-    >>
+  ednWhitespace >>
   -- collections
         listParser
     <|> vectorParser

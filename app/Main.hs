@@ -1,6 +1,10 @@
 module Main where
 
-import EdnParser
+import Api
+import Data.Text
+import Data.Foldable
 
 main :: IO ()
-main = runParse
+main =
+  (readFile "test.edn") >>=
+  mapM_ (mapM_ print) . parseEdnElements . pack
